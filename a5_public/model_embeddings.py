@@ -19,7 +19,7 @@ import torch.nn as nn
 
 from cnn import CNN
 from highway import Highway
-
+import pdb
 
 # End "do not change"
 
@@ -39,7 +39,13 @@ class ModelEmbeddings(nn.Module):
         super(ModelEmbeddings, self).__init__()
 
         ### YOUR CODE HERE for part 1h
-
+        self.word_embed_size = word_embed_size
+        self.e_char = 50
+        self.embedding = nn.Embedding(len(vocab.char2id), self.e_char, padding_idx=vocab.char_pad)
+        self.cnn = CNN(self.e_char, word_embed_size)
+        self.highway = Highway(word_embed_size)
+        self.dropout = nn.Dropout(0.3)
+        
         ### END YOUR CODE
 
     def forward(self, input):
@@ -52,6 +58,14 @@ class ModelEmbeddings(nn.Module):
             CNN-based embeddings for each word of the sentences in the batch
         """
         ### YOUR CODE HERE for part 1h
+        sentence_length, batch_size, _ = input.size()
+        x_embed = self.embedding(input)
+        x_embed = x_embed.view(sentence_length*batch_size, x_embed.size(2), x_embed.size(3)).permute(0, 2, 1)
+        x_convout = self.cnn(x_embed)
+        x_highway = self.highway(x_convout)
+        x_wordemb = self.dropout(x_highway)
+        x_wordemb = x_wordemb.view(sentence_length, batch_size, -1)
 
+        return x_wordemb
         ### END YOUR CODE
 

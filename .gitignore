@@ -4,3 +4,7 @@ a3/student/utils/__pycache__/*
 a3/student/utils/__pycache__/
 a4/__pychache__/*
 a4/__pycache__/
+a5_public/__pycache__/
+a5_public/__pycache__/*
+a5_public/model.bin
+a5_public/model.bin.optim

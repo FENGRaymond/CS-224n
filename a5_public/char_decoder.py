@@ -7,6 +7,7 @@ CS224N 2019-20: Homework 5
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class CharDecoder(nn.Module):
@@ -23,6 +24,7 @@ class CharDecoder(nn.Module):
         self.char_output_projection = nn.Linear(hidden_size, len(self.target_vocab.char2id))
         self.decoderCharEmb = nn.Embedding(len(self.target_vocab.char2id), char_embedding_size,
                                            padding_idx=self.target_vocab.char_pad)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, input, dec_hidden=None):
         """ Forward pass of character decoder.
@@ -35,7 +37,11 @@ class CharDecoder(nn.Module):
         """
         ### YOUR CODE HERE for part 2a
         ### TODO - Implement the forward pass of the character decoder.
-
+        input_embeddings = self.decoderCharEmb(input) # (length, batch_size, char_embedding_size)
+        scores, dec_hidden = self.charDecoder(input_embeddings, dec_hidden) # (length, batch_size, hidden_size)
+        scores = self.char_output_projection(scores) # (length, batch_size, vocab_size)
+        
+        return scores, dec_hidden
         ### END YOUR CODE
 
     def train_forward(self, char_sequence, dec_hidden=None):
@@ -53,7 +59,24 @@ class CharDecoder(nn.Module):
         ###       - char_sequence corresponds to the sequence x_1 ... x_{n+1} (e.g., <START>,m,u,s,i,c,<END>). Read the handout about how to construct input and target sequence of CharDecoderLSTM.
         ###       - Carefully read the documentation for nn.CrossEntropyLoss and our handout to see what this criterion have already included:
         ###             https://pytorch.org/docs/stable/nn.html#crossentropyloss
-
+        
+        # 1. build the input (len, b_size) and target mask
+        input_sequence = char_sequence[:-1, :]
+        target_sequence = char_sequence[1:, :] # (length, batch_size)
+        target_masks = (char_sequence[1:, :] != self.target_vocab.char_pad).float() # (length, batch_size)
+        
+        # 2. pass input to CharDecoderLSTM and get a score vector, then take softmax to get pt
+        scores, dec_hidden = self.forward(input_sequence, dec_hidden)
+        criterion = nn.CrossEntropyLoss(reduction='none')
+        loss_char = criterion(scores.permute(1, 2, 0), target_sequence.permute(1, 0)) # (N,C,d) and (N,d)
+        loss_char = torch.sum(loss_char.permute(1, 0)  * target_masks)
+#         P = F.log_softmax(scores, dim=-1) # (length, batch_size, vocab_size)
+        
+        # 3. calcualte cross entropy loss
+#         loss_char = torch.gather(P, dim=-1, index=target_sequence.unsqueeze(-1)).squeeze() * target_masks
+#         loss_char = -torch.sum(loss_char)
+        
+        return loss_char
         ### END YOUR CODE
 
     def decode_greedy(self, initialStates, device, max_length=21):
@@ -75,6 +98,17 @@ class CharDecoder(nn.Module):
         ###      - You may find torch.argmax or torch.argmax useful
         ###      - We use curly brackets as start-of-word and end-of-word characters. That is, use the character '{' for <START> and '}' for <END>.
         ###        Their indices are self.target_vocab.start_of_word and self.target_vocab.end_of_word, respectively.
-
+        batch_size = initialStates[0].size(1)
+        output_word =  ['' for i in range(batch_size)]
+        current_char = torch.ones((1, batch_size), dtype=torch.long, device=device) * self.target_vocab.start_of_word
+        for t in range(max_length):
+            input_embeddings = self.decoderCharEmb(current_char) # (length, batch_size, char_embedding_size)
+            scores, initialStates = self.charDecoder(input_embeddings, initialStates) # (length, batch_size, hidden_size)
+            scores = self.char_output_projection(scores) # (length, batch_size, vocab_size)
+            P = self.softmax(scores)
+            current_char = torch.argmax(P, dim=-1, keepdim=False)
+            output_word = [output_word[i]+self.target_vocab.id2char[current_char[0, i].item()] for i in range(batch_size)]
+        output_word = [output_word[i].split('}')[0] for i in range(batch_size)]
+        return output_word
         ### END YOUR CODE
 
