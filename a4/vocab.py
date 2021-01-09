@@ -127,7 +127,7 @@ class VocabEntry(object):
         """
         word_ids = self.words2indices(sents)
         sents_t = pad_sents(word_ids, self['<pad>'])
-        sents_var = torch.tensor(sents_t, dtype=torch.long, device=device)
+        sents_var = torch.tensor(sents_t, dtype=torch.long, device=device) # NOTE: important
         return torch.t(sents_var)
 
     @staticmethod
@@ -215,6 +215,8 @@ if __name__ == '__main__':
 
     vocab = Vocab.build(src_sents, tgt_sents, int(args['--size']), int(args['--freq-cutoff']))
     print('generated vocabulary, source %d words, target %d words' % (len(vocab.src), len(vocab.tgt)))
+    import pdb
+    pdb.set_trace()
 
     vocab.save(args['VOCAB_FILE'])
     print('vocabulary saved to %s' % args['VOCAB_FILE'])
